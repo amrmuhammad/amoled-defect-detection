@@ -5,7 +5,7 @@ Creates realistic display defects for training AI models
 Defect types:
 - Dead pixels (dark spots)
 - Stuck pixels (bright color spots)
-- Mura (brightness non-uniformity)
+- Mura (brightness non-uniformity) - IMPROVED VISIBILITY
 - Scratches (line defects)
 - Dust contamination
 """
@@ -70,15 +70,15 @@ class AMOLEDDefectGenerator:
         h, w = img.shape[:2]
         
         if num_pixels is None:
-            num_pixels = random.randint(1, 20)
+            num_pixels = random.randint(5, 30)  # Increased for better visibility
         
         if center is None:
             center = (random.randint(20, w-20), random.randint(20, h-20))
         
         for _ in range(num_pixels):
             # Add slight spread around center
-            x = center[0] + random.randint(-8, 8)
-            y = center[1] + random.randint(-8, 8)
+            x = center[0] + random.randint(-10, 10)
+            y = center[1] + random.randint(-10, 10)
             
             if 0 <= x < w and 0 <= y < h:
                 # Dead pixel = black
@@ -112,10 +112,10 @@ class AMOLEDDefectGenerator:
         x = random.randint(10, w-10)
         y = random.randint(10, h-10)
         
-        # Make it a small cluster (2-3 pixels)
-        for dx in [-1, 0, 1]:
-            for dy in [-1, 0, 1]:
-                if 0 <= x+dx < w and 0 <= y+dy < h:
+        # Make it a larger cluster for visibility (3-5 pixels)
+        for dx in range(-2, 3):
+            for dy in range(-2, 3):
+                if abs(dx) + abs(dy) <= 2 and 0 <= x+dx < w and 0 <= y+dy < h:
                     img[y+dy, x+dx] = color
                     
         return img
@@ -124,13 +124,15 @@ class AMOLEDDefectGenerator:
                  intensity: float = None,
                  pattern_type: str = None) -> np.ndarray:
         """
-        Add Mura defect (brightness non-uniformity)
+        Add Mura defect with HIGH visibility for training
         
         Mura types:
         - 'cloud': Cloud-like uneven brightness
         - 'line': Linear gradient
         - 'circle': Circular pattern
         - 'random': Random noise pattern
+        - 'band': Horizontal or vertical band
+        - 'spot': Localized spot (common Mura type)
         
         Args:
             image: Input image
@@ -143,11 +145,12 @@ class AMOLEDDefectGenerator:
         img = image.copy().astype(np.float32)
         h, w = img.shape[:2]
         
+        # Much higher intensity for Mura to make it visible
         if intensity is None:
-            intensity = random.uniform(0.1, 0.4)
+            intensity = random.uniform(0.6, 0.95)  # Very visible
         
         if pattern_type is None:
-            pattern_type = random.choice(['cloud', 'line', 'circle', 'random'])
+            pattern_type = random.choice(['cloud', 'line', 'circle', 'random', 'band', 'spot'])
         
         # Create coordinate grid
         x = np.linspace(-1, 1, w)
@@ -156,8 +159,8 @@ class AMOLEDDefectGenerator:
         
         if pattern_type == 'cloud':
             # Cloud-like pattern using sine/cosine waves
-            pattern = np.sin(5 * xx) * np.cos(5 * yy)
-            pattern += 0.3 * np.sin(15 * xx * yy)
+            pattern = np.sin(4 * xx) * np.cos(4 * yy)
+            pattern += 0.5 * np.sin(12 * xx * yy)
             
         elif pattern_type == 'line':
             # Linear gradient
@@ -166,17 +169,31 @@ class AMOLEDDefectGenerator:
         elif pattern_type == 'circle':
             # Circular pattern
             r = np.sqrt(xx**2 + yy**2)
-            pattern = np.cos(8 * r)
+            pattern = np.cos(6 * r)
+            
+        elif pattern_type == 'band':
+            # Horizontal or vertical band (common Mura type)
+            if random.random() > 0.5:
+                pattern = np.sin(2 * np.pi * 3 * yy)
+            else:
+                pattern = np.sin(2 * np.pi * 3 * xx)
+                
+        elif pattern_type == 'spot':
+            # Localized spot (very common Mura type)
+            cx = random.uniform(-0.5, 0.5)
+            cy = random.uniform(-0.5, 0.5)
+            r = np.sqrt((xx - cx)**2 + (yy - cy)**2)
+            pattern = np.exp(-r**2 * 20) * random.choice([-1, 1])
             
         else:  # random
             # Random Perlin-like noise
-            pattern = np.random.normal(0, 0.5, (h, w))
-            # Smooth it
-            pattern = cv2.GaussianBlur(pattern, (15, 15), 0)
+            pattern = np.random.normal(0, 1.2, (h, w))
+            pattern = cv2.GaussianBlur(pattern, (31, 31), 0)
         
         # Normalize pattern to range [0, 1]
         pattern = (pattern - pattern.min()) / (pattern.max() - pattern.min())
-        pattern = (pattern - 0.5) * intensity * 2
+        # Apply with VERY HIGH intensity multiplier
+        pattern = (pattern - 0.5) * intensity * 2.5
         
         # Apply pattern to each channel
         for c in range(3):
@@ -201,7 +218,7 @@ class AMOLEDDefectGenerator:
         h, w = img.shape[:2]
         
         if length is None:
-            length = random.randint(30, 150)
+            length = random.randint(40, 200)  # Longer scratches for visibility
         
         # Random start point
         start_x = random.randint(20, w-20)
@@ -212,8 +229,8 @@ class AMOLEDDefectGenerator:
         end_x = int(start_x + length * np.cos(angle))
         end_y = int(start_y + length * np.sin(angle))
         
-        # Draw line
-        thickness = random.randint(1, 3)
+        # Draw line with thicker line for visibility
+        thickness = random.randint(2, 4)
         color = (0, 0, 0) if random.random() > 0.3 else (255, 255, 255)
         
         cv2.line(img, (start_x, start_y), (end_x, end_y), color, thickness)
@@ -236,15 +253,15 @@ class AMOLEDDefectGenerator:
         h, w = img.shape[:2]
         
         if num_particles is None:
-            num_particles = random.randint(1, 15)
+            num_particles = random.randint(3, 25)  # More dust particles
         
         for _ in range(num_particles):
             x = random.randint(5, w-5)
             y = random.randint(5, h-5)
-            radius = random.randint(1, 4)
+            radius = random.randint(2, 6)  # Larger dust particles
             color = random.choice([
                 (0, 0, 0),           # Black dust
-                (50, 50, 50),        # Dark gray
+                (30, 30, 30),        # Dark gray
                 (200, 200, 200)      # Light dust
             ])
             
@@ -274,9 +291,9 @@ class AMOLEDDefectGenerator:
         # Choose random defects if not specified
         if defect_types is None:
             all_defects = ['dead_pixel', 'stuck_pixel', 'mura', 'scratch', 'dust']
-            # Add 1-3 random defects
-            num_defects = random.randint(1, 3)
-            defect_types = random.sample(all_defects, num_defects)
+            # Add 2-5 defects (more variety for training)
+            num_defects = random.randint(2, 5)
+            defect_types = random.sample(all_defects, min(num_defects, len(all_defects)))
         
         # Apply each defect
         for defect in defect_types:
@@ -333,6 +350,7 @@ class AMOLEDDefectGenerator:
             labels.append(1)  # 1 = defective
             
             if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
                 cv2.imwrite(f"{save_dir}/defect_{i}_{'_'.join(info['defects'])}.png", image)
         
         # Generate clean images
@@ -345,6 +363,7 @@ class AMOLEDDefectGenerator:
             labels.append(0)  # 0 = clean
             
             if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
                 cv2.imwrite(f"{save_dir}/clean_{i}.png", image)
         
         return np.array(images), np.array(labels)
@@ -380,7 +399,7 @@ class AMOLEDDefectGenerator:
 # ============= DEMO CODE =============
 if __name__ == "__main__":
     print("=" * 50)
-    print("AMOLED Defect Generator - Demo")
+    print("AMOLED Defect Generator - Demo (Improved Mura)")
     print("=" * 50)
     
     # Create generator
@@ -409,4 +428,4 @@ if __name__ == "__main__":
         cv2.imwrite(f"demo/sample_images/defect_sample_{i}.png", img)
         print(f"   Saved: defect_sample_{i}.png - Defects: {info['defects']}")
     
-    print("\n✅ All done! Ready for training.")
+    print("\n✅ All done! Ready for training with improved Mura visibility.")
