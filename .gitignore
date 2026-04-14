@@ -21,10 +21,15 @@ ENV/
 *.swp
 *.swo
 
-# Data
+# Model files (too large for Git)
+*.keras
 *.h5
+*.pb
 *.pkl
-*.npy
+models/*.png
+models/*.h5
+
+# Data
 data/raw/
 data/processed/
 
@@ -35,4 +40,3 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
-venv/
