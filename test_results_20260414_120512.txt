@@ -1,0 +1,19 @@
+============================================================
+AMOLED DEFECT DETECTOR - TEST RESULTS
+============================================================
+
+Test Date: 2026-04-14 12:05:12
+
+Clean Image Accuracy: 100.0%
+Mixed Image Accuracy: 100.0%
+
+Defect Type Breakdown:
+  - DEAD_PIXEL: 66.7%
+  - STUCK_PIXEL: 66.7%
+  - MURA: 33.3%
+  - SCRATCH: 100.0%
+  - DUST: 100.0%
+
+Overall Accuracy: 70.0%
+Total Tests: 30
+Correct Predictions: 21

@@ -1,16 +1,22 @@
 """
 Training Pipeline with Transfer Learning - Memory Efficient Version
 Processes data in batches to avoid RAM exhaustion
+FIXED: Deterministic training and proper tensor handling
 """
 
 import numpy as np
 import cv2
 import os
 import sys
+import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+# Set random seeds for reproducibility
+np.random.seed(42)
+tf.random.set_seed(42)
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -43,16 +49,6 @@ class TransferTrainingPipeline:
                      batch_size: int = 200) -> dict:
         """
         Generate and prepare data IN BATCHES to save memory
-        
-        Args:
-            num_samples: Total number of images to generate
-            defect_ratio: Proportion of defective images
-            test_size: Proportion for testing
-            val_size: Proportion for validation
-            batch_size: Number of images to process at once
-            
-        Returns:
-            Dictionary with train/val/test splits
         """
         print("=" * 60)
         print("STEP 1: Generating Synthetic Dataset (Batch Mode)")
@@ -153,15 +149,6 @@ class TransferTrainingPipeline:
             batch_size: int = 200) -> TransferDefectDetector:
         """
         Run complete training pipeline
-        
-        Args:
-            num_samples: Number of images to generate
-            epochs: Initial training epochs
-            fine_tune_epochs: Additional epochs for fine-tuning
-            batch_size: Batch size for data generation
-            
-        Returns:
-            Trained detector
         """
         print("\n" + "=" * 60)
         print("🚀 TRANSFER LEARNING - AMOLED DEFECT DETECTION")
@@ -186,7 +173,6 @@ class TransferTrainingPipeline:
         self.detector.build_model()
         print("\n✅ Model built successfully!")
         print(f"   Total parameters: {self.detector.model.count_params():,}")
-        print(f"   Trainable parameters: {len(self.detector.model.trainable_variables):,}")
         
         # Train
         history = self.detector.train(
@@ -195,7 +181,7 @@ class TransferTrainingPipeline:
             X_val=data['X_val'],
             y_val=data['y_val'],
             epochs=epochs,
-            batch_size=32,  # Training batch size (smaller than generation batch)
+            batch_size=32,
             fine_tune_epochs=fine_tune_epochs
         )
         
@@ -225,16 +211,19 @@ class TransferTrainingPipeline:
         plt.ylabel('True Label')
         plt.xlabel('Predicted Label')
         plt.tight_layout()
+        
+        os.makedirs('models', exist_ok=True)
         plt.savefig('models/transfer_confusion_matrix.png', dpi=150)
         plt.show()
         
-        # Metrics - FIXED: Handle different metric name formats
-        metrics = self.detector.evaluate(data['X_test'], data['y_test'])
+        # Calculate metrics manually
+        accuracy = np.mean(y_pred == data['y_test'])
+        tp = np.sum((y_pred == 1) & (data['y_test'] == 1))
+        fp = np.sum((y_pred == 1) & (data['y_test'] == 0))
+        fn = np.sum((y_pred == 0) & (data['y_test'] == 1))
         
-        # Extract values safely with fallbacks
-        accuracy = metrics.get('accuracy', metrics.get('acc', 0))
-        precision = metrics.get('precision', 0)
-        recall = metrics.get('recall', 0)
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
         
         print(f"\n📊 Test Metrics:")
         print(f"   ┌─────────────────┬────────────┐")
@@ -250,7 +239,6 @@ class TransferTrainingPipeline:
         self.detector.plot_training_history()
         
         # Save model
-        os.makedirs('models', exist_ok=True)
         self.detector.save_model('models/transfer_defect_detector.keras')
         
         print("\n" + "=" * 60)
@@ -259,7 +247,7 @@ class TransferTrainingPipeline:
         
         # Test on a few random images
         print("\n🎯 Quick test on random images:")
-        for i in range(3):
+        for i in range(5):
             # Random clean or defective
             if np.random.random() > 0.5:
                 img, info = self.generator.generate_defective_image()
@@ -268,6 +256,10 @@ class TransferTrainingPipeline:
                 img = self.generator.generate_clean_display()
                 info = {'defects': ['none']}
                 expected = "CLEAN"
+            
+            # Convert to numpy if needed
+            if not isinstance(img, np.ndarray):
+                img = img.numpy()
             
             confidence, prediction = self.detector.predict(img)
             status = "✅" if prediction == expected else "❌"
