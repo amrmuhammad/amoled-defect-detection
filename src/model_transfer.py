@@ -192,7 +192,7 @@ class TransferDefectDetector:
                 verbose=verbose
             )
         
-        # Combine histories (FIXED: handle both History objects correctly)
+        # Combine histories
         history2_dict = history2.history if history2 is not None else {}
         
         self.history = {
@@ -213,31 +213,64 @@ class TransferDefectDetector:
         Predict if a single image has defects
         
         Args:
-            image: Input image (height, width, channels)
+            image: Input image (height, width, channels) as numpy array or tensor
             
         Returns:
             Tuple of (confidence_score, prediction_label)
         """
         if self.model is None:
-            raise ValueError("Model not trained yet. Call train() first.")
+            raise ValueError("Model not trained yet. Call train() or load_model() first.")
         
-        # Preprocess
+        # Convert to numpy if it's a tensor
+        if hasattr(image, 'numpy'):
+            image = image.numpy()
+        
+        # Ensure it's a numpy array
+        if not isinstance(image, np.ndarray):
+            image = np.array(image)
+        
+        # Check if image is empty or invalid
+        if image.size == 0:
+            raise ValueError("Empty image provided")
+        
+        # Handle different input shapes
+        original_dtype = image.dtype
+        
+        # Resize if needed
         if image.shape[:2] != self.input_shape[:2]:
+            # Use tensorflow for resizing (handles both numpy and tensor)
             image = tf.image.resize(image, self.input_shape[:2])
+            # Convert back to numpy for consistency
+            if hasattr(image, 'numpy'):
+                image = image.numpy()
+            else:
+                image = np.array(image)
         
         # Ensure float32 and normalize if needed
         if image.dtype != np.float32:
             image = image.astype(np.float32)
         
         # Normalize if not already (assuming [0,255] input)
+        # Check max value to determine if normalization is needed
         if image.max() > 1.0:
             image = image / 255.0
         
+        # Ensure values are in [0, 1] range
+        image = np.clip(image, 0.0, 1.0)
+        
+        # Add batch dimension
         image = np.expand_dims(image, axis=0)
         
         # Predict
-        confidence = self.model.predict(image, verbose=0)[0][0]
+        try:
+            confidence = self.model.predict(image, verbose=0)[0][0]
+        except Exception as e:
+            raise RuntimeError(f"Prediction failed: {e}")
         
+        # Ensure confidence is a float
+        confidence = float(confidence)
+        
+        # Determine label
         label = "DEFECTIVE" if confidence > 0.5 else "CLEAN"
         
         return confidence, label
@@ -255,16 +288,23 @@ class TransferDefectDetector:
         if self.model is None:
             raise ValueError("Model not trained yet.")
         
+        # Convert to numpy if needed
+        if hasattr(images, 'numpy'):
+            images = images.numpy()
+        
         # Preprocess batch
         if images.shape[1:3] != self.input_shape[:2]:
-            import tensorflow as tf
             images = tf.image.resize(images, self.input_shape[:2])
+            if hasattr(images, 'numpy'):
+                images = images.numpy()
         
         if images.dtype != np.float32:
             images = images.astype(np.float32)
         
         if images.max() > 1.0:
             images = images / 255.0
+        
+        images = np.clip(images, 0.0, 1.0)
         
         return self.model.predict(images, verbose=0).flatten()
     
@@ -312,8 +352,7 @@ class TransferDefectDetector:
         self.model = keras.models.load_model(filepath)
         print(f"✅ Model loaded from {filepath}")
         
-        # Rebuild base_model reference for fine-tuning (optional)
-        # The loaded model doesn't have base_model attribute, so we set to None
+        # The loaded model doesn't have base_model attribute, so set to None
         self.base_model = None
     
     def plot_training_history(self):
@@ -378,10 +417,12 @@ if __name__ == "__main__":
     print("   - Can be fine-tuned for better performance")
     
     # Test with random data
-    print("\n3. Testing with random data...")
-    random_input = np.random.rand(1, 128, 128, 3).astype(np.float32)
+    print("\n3. Testing prediction with random data...")
+    random_input = np.random.rand(128, 128, 3).astype(np.float32)
     try:
-        output = detector.model.predict(random_input, verbose=0)
-        print(f"   ✅ Forward pass successful. Output shape: {output.shape}")
+        confidence, label = detector.predict(random_input)
+        print(f"   ✅ Prediction successful!")
+        print(f"   Confidence: {confidence:.4f}")
+        print(f"   Label: {label}")
     except Exception as e:
         print(f"   ❌ Error: {e}")
