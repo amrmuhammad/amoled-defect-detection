@@ -3,9 +3,9 @@ Synthetic AMOLED Defect Generator
 Creates realistic display defects for training AI models
 
 Defect types:
-- Dead pixels (dark spots)
-- Stuck pixels (bright color spots)
-- Mura (brightness non-uniformity) - IMPROVED VISIBILITY
+- Dead pixels (dark spots) - ENHANCED VISIBILITY
+- Stuck pixels (bright color spots) - ENHANCED VISIBILITY
+- Mura (brightness non-uniformity)
 - Scratches (line defects)
 - Dust contamination
 """
@@ -56,7 +56,7 @@ class AMOLEDDefectGenerator:
                                 num_pixels: int = None,
                                 center: Tuple[int, int] = None) -> np.ndarray:
         """
-        Add dead pixel cluster (dark spots)
+        Add dead pixel cluster (dark spots) - ENHANCED VISIBILITY
         
         Args:
             image: Input image
@@ -69,27 +69,32 @@ class AMOLEDDefectGenerator:
         img = image.copy()
         h, w = img.shape[:2]
         
+        # Much larger clusters for visibility
         if num_pixels is None:
-            num_pixels = random.randint(5, 30)  # Increased for better visibility
+            num_pixels = random.randint(15, 60)  # Increased significantly
         
         if center is None:
-            center = (random.randint(20, w-20), random.randint(20, h-20))
+            center = (random.randint(30, w-30), random.randint(30, h-30))
         
-        for _ in range(num_pixels):
-            # Add slight spread around center
-            x = center[0] + random.randint(-10, 10)
-            y = center[1] + random.randint(-10, 10)
-            
-            if 0 <= x < w and 0 <= y < h:
-                # Dead pixel = black
-                img[y, x] = [0, 0, 0]
-                
+        # Create a larger dark region (not just single pixels)
+        radius = random.randint(3, 12)
+        for dx in range(-radius, radius+1):
+            for dy in range(-radius, radius+1):
+                if dx*dx + dy*dy <= radius*radius:
+                    x = center[0] + dx
+                    y = center[1] + dy
+                    if 0 <= x < w and 0 <= y < h:
+                        # Varying darkness levels (darker at center)
+                        distance = np.sqrt(dx*dx + dy*dy)
+                        darkness = int(255 * (1 - distance / radius) * random.uniform(0.5, 0.9))
+                        img[y, x] = [darkness, darkness, darkness]
+        
         return img
     
     def add_stuck_pixel(self, image: np.ndarray,
                         color: Tuple[int, int, int] = None) -> np.ndarray:
         """
-        Add stuck pixel (bright color spot)
+        Add stuck pixel (bright color spot) - ENHANCED VISIBILITY
         
         Args:
             image: Input image
@@ -101,22 +106,34 @@ class AMOLEDDefectGenerator:
         img = image.copy()
         h, w = img.shape[:2]
         
+        # Much brighter and larger clusters
         if color is None:
-            # Random bright color
+            # Very bright colors
             color = (
-                random.choice([0, 255]),
-                random.choice([0, 255]),
-                random.choice([0, 255])
+                random.choice([255, 255, 200, 220, 250]),
+                random.choice([255, 255, 200, 220, 250]),
+                random.choice([255, 255, 200, 220, 250])
             )
+            # Ensure at least one channel is max brightness
+            channel = random.randint(0, 2)
+            color_list = list(color)
+            color_list[channel] = 255
+            color = tuple(color_list)
         
-        x = random.randint(10, w-10)
-        y = random.randint(10, h-10)
+        x = random.randint(15, w-15)
+        y = random.randint(15, h-15)
         
-        # Make it a larger cluster for visibility (3-5 pixels)
-        for dx in range(-2, 3):
-            for dy in range(-2, 3):
-                if abs(dx) + abs(dy) <= 2 and 0 <= x+dx < w and 0 <= y+dy < h:
-                    img[y+dy, x+dx] = color
+        # Create a larger bright spot (2-6 pixel radius)
+        radius = random.randint(2, 6)
+        for dx in range(-radius, radius+1):
+            for dy in range(-radius, radius+1):
+                if dx*dx + dy*dy <= radius*radius:
+                    if 0 <= x+dx < w and 0 <= y+dy < h:
+                        # Brighter at center, dimmer at edges
+                        distance = np.sqrt(dx*dx + dy*dy)
+                        intensity = 1.0 - (distance / radius) * 0.4
+                        pixel_color = tuple(int(c * intensity) for c in color)
+                        img[y+dy, x+dx] = pixel_color
                     
         return img
     
@@ -273,7 +290,7 @@ class AMOLEDDefectGenerator:
                                   defect_types: List[str] = None,
                                   brightness: int = 128) -> Tuple[np.ndarray, Dict]:
         """
-        Generate a single image with random defects
+        Generate a single image with random defects - WITH BALANCED DEFECTS
         
         Args:
             defect_types: List of defects to add (random selection if None)
@@ -294,6 +311,14 @@ class AMOLEDDefectGenerator:
             # Add 2-5 defects (more variety for training)
             num_defects = random.randint(2, 5)
             defect_types = random.sample(all_defects, min(num_defects, len(all_defects)))
+            
+            # 80% chance to include dead_pixel if not already included
+            if 'dead_pixel' not in defect_types and random.random() < 0.8:
+                defect_types.append('dead_pixel')
+            
+            # 80% chance to include stuck_pixel if not already included
+            if 'stuck_pixel' not in defect_types and random.random() < 0.8:
+                defect_types.append('stuck_pixel')
         
         # Apply each defect
         for defect in defect_types:
@@ -399,7 +424,7 @@ class AMOLEDDefectGenerator:
 # ============= DEMO CODE =============
 if __name__ == "__main__":
     print("=" * 50)
-    print("AMOLED Defect Generator - Demo (Improved Mura)")
+    print("AMOLED Defect Generator - Demo (Enhanced Dead/Stuck Pixels)")
     print("=" * 50)
     
     # Create generator
@@ -428,4 +453,4 @@ if __name__ == "__main__":
         cv2.imwrite(f"demo/sample_images/defect_sample_{i}.png", img)
         print(f"   Saved: defect_sample_{i}.png - Defects: {info['defects']}")
     
-    print("\n✅ All done! Ready for training with improved Mura visibility.")
+    print("\n✅ All done! Ready for training with enhanced dead/stuck pixel visibility.")
