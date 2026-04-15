@@ -4,7 +4,7 @@ Our paper "AMOLED-DefectNet: A Transfer Learning Approach for 100% Accurate
 Multi-Class Defect Detection in AMOLED Displays" is available here:
 
 - **[Download PDF](main.pdf)** - 17 pages, 5 figures, 22 references
-- **[LaTeX Source](paper/)** - Complete source code for the paper
+- **[LaTeX Source](amoled-paper/)** - Complete source code for the paper
 
 ### Paper Abstract
 
